@@ -5,15 +5,29 @@
 package io.flutter.plugins.webviewflutter;
 
 import static android.content.Context.INPUT_METHOD_SERVICE;
-
+  
 import android.content.Context;
 import android.graphics.Rect;
 import android.os.Build;
 import android.util.Log;
+import android.view.ActionMode;
+import android.view.LayoutInflater;
+import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.ListPopupWindow;
+import android.widget.AbsoluteLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.content.ClipboardManager;
+import android.app.Application; 
+import java.util.List;
+import java.util.Arrays;
 
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
@@ -229,5 +243,169 @@ final class InputAwareWebView extends WebView {
       }
     }
     return false;
+  }
+
+  @Override
+  public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+    
+    InputConnection connection = super.onCreateInputConnection(outAttrs);
+    if (connection == null && containerView != null) {
+      /// solve the problem of some models stuck and flashing back
+      containerView
+          .getHandler()
+          .postDelayed(
+              new Runnable() {
+                @Override
+                public void run() {
+                  InputMethodManager imm =
+                      (InputMethodManager) getContext().getSystemService(INPUT_METHOD_SERVICE);
+                  if (!imm.isAcceptingText()) {
+                    imm.hideSoftInputFromWindow(
+                        containerView.getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+                  }
+                }
+              },
+              128);
+    }
+    return connection;
+  }
+
+
+  private MotionEvent ev;
+  private OnPaste onPaste; 
+
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent ev) {
+    this.ev = ev;
+    return super.dispatchTouchEvent(ev);
+  }
+  
+
+  @Override
+  public boolean onTouchEvent(MotionEvent event) {
+    if (event.getAction() == MotionEvent.ACTION_DOWN && floatingActionView != null) {
+      this.removeView(floatingActionView);
+      floatingActionView = null;
+    }
+    
+    return super.onTouchEvent(event);
+  }
+
+  @Override
+  public ActionMode startActionMode(ActionMode.Callback callback) { 
+    return rebuildActionMode(super.startActionMode(callback), callback);
+  }
+
+  @Override
+  public ActionMode startActionMode(ActionMode.Callback callback, int type) {
+    return rebuildActionMode(super.startActionMode(callback, type), callback);
+  }
+
+  
+
+  private LinearLayout floatingActionView;
+ 
+  /** rebuild the menu */
+  private ActionMode rebuildActionMode(
+      final ActionMode actionMode, final ActionMode.Callback callback) { 
+    if (floatingActionView != null) {
+      this.removeView(floatingActionView);
+      floatingActionView = null;
+    }
+    floatingActionView =
+        (LinearLayout)
+            LayoutInflater.from(getContext()).inflate(R.layout.floating_action_mode, null);
+    for (int i = 0; i < actionMode.getMenu().size(); i++) {
+      final MenuItem menu = actionMode.getMenu().getItem(i);
+      TextView text =
+          (TextView)
+              LayoutInflater.from(getContext()).inflate(R.layout.floating_action_mode_item, null);
+              Log.e(TAG,menu.getTitle().toString());
+      text.setText(menu.getTitle());
+      floatingActionView.addView(text);   
+      List<String>arr= Arrays.asList("粘贴","自动填充");
+      if(arr.contains(menu.getTitle().toString())){ 
+        text.setOnClickListener(
+          new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+              ClipboardManager cmb = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE); 
+              String pasteContent = cmb.getText().toString();
+              Log.e(TAG,pasteContent);
+              Log.e(TAG,"--------------");
+              final String strJS = String.format("var obj = document.activeElement;obj.value='%s';if (\"createEvent\" in document) {var evt = document.createEvent(\"HTMLEvents\");evt.initEvent(\"input\", true, false);obj.dispatchEvent(evt);} else obj.fireEvent(\"input\")", pasteContent);
+              Log.e(TAG,strJS);
+              InputAwareWebView.this.removeView(floatingActionView);
+              floatingActionView = null;
+              if(null != onPaste){
+                onPaste.paste(strJS);
+              } 
+            }
+          });
+      }else{ 
+
+
+      text.setOnClickListener(
+            new OnClickListener() {
+              @Override
+              public void onClick(View view) {
+                InputAwareWebView.this.removeView(floatingActionView);
+                floatingActionView = null;
+                callback.onActionItemClicked(actionMode, menu);
+              }
+            });
+      }
+      // supports up to 4 options
+      if (i >= 4) break;
+    }
+
+    final int x = (int) ev.getX();
+    final int y = (int) ev.getY();
+    floatingActionView
+        .getViewTreeObserver()
+        .addOnGlobalLayoutListener(
+            new ViewTreeObserver.OnGlobalLayoutListener() {
+              @Override
+              public void onGlobalLayout() {
+                if (Build.VERSION.SDK_INT >= 16) {
+                  floatingActionView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                } else {
+                  floatingActionView.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+                }
+                onFloatingActionGlobalLayout(x, y);
+              }
+            });
+    this.addView(floatingActionView, new AbsoluteLayout.LayoutParams(-2, -2, x, y));
+    actionMode.getMenu().clear();
+    return actionMode;
+  } 
+
+
+
+  /** reposition menu options */
+  private void onFloatingActionGlobalLayout(int x, int y) {
+    int maxWidth = InputAwareWebView.this.getWidth();
+    int maxHeight = InputAwareWebView.this.getHeight();
+    int width = floatingActionView.getWidth();
+    int height = floatingActionView.getHeight();
+    int curx = x - width / 2;
+    if (curx < 0) {
+      curx = 0;
+    } else if (curx + width > maxWidth) {
+      curx = maxWidth - width;
+    }
+    int cury = y + 10;
+    if (cury + height > maxHeight) {
+      cury = y - height - 10;
+    }
+
+    InputAwareWebView.this.updateViewLayout(
+        floatingActionView,
+        new AbsoluteLayout.LayoutParams(-2, -2, curx, cury + InputAwareWebView.this.getScrollY()));
+    floatingActionView.setAlpha(1);
+  }
+
+  public void setOnPaste(OnPaste p) { 
+      this.onPaste = p;
   }
 }

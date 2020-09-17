@@ -43,6 +43,12 @@ public class FlutterWebView implements PlatformView, MethodCallHandler {
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
     displayListenerProxy.onPreWebViewInitialization(displayManager);
     webView = new InputAwareWebView(context, containerView);
+    webView.setOnPaste(new OnPaste() {
+            @Override
+            public void paste(String evaljs) {
+                webView.evaluateJavascript(evaljs, null);
+            }
+        });
     displayListenerProxy.onPostWebViewInitialization(displayManager);
 
     platformThreadHandler = new Handler(context.getMainLooper());
