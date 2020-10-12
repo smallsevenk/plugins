@@ -21,6 +21,8 @@ import io.flutter.plugin.platform.PlatformView;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import android.webkit.WebChromeClient;
+import android.webkit.WebView;
 
 public class FlutterWebView implements PlatformView, MethodCallHandler {
   private static final String JS_CHANNEL_NAMES_FIELD = "javascriptChannelNames";
@@ -317,6 +319,16 @@ public class FlutterWebView implements PlatformView, MethodCallHandler {
           final boolean debuggingEnabled = (boolean) settings.get(key);
 
           webView.setWebContentsDebuggingEnabled(debuggingEnabled);
+          break;
+        case "hasProgressTracking":
+          final boolean progressTrackingEnabled = (boolean) settings.get(key);
+          if (progressTrackingEnabled) {
+            webView.setWebChromeClient(new WebChromeClient() {
+              public void onProgressChanged(WebView view, int progress) {
+                flutterWebViewClient.onLoadingProgress(progress);
+              }
+            });
+          }
           break;
         case "gestureNavigationEnabled":
           break;

@@ -31,6 +31,8 @@ abstract class WebViewPlatformCallbacksHandler {
 
   /// Report web resource loading error to the host application.
   void onWebResourceError(WebResourceError error);
+
+  void onProgress(int progress);
 }
 
 /// Possible error type categorizations used by [WebResourceError].
@@ -382,6 +384,7 @@ class WebSettings {
     this.hasNavigationDelegate,
     this.debuggingEnabled,
     this.gestureNavigationEnabled,
+    this.hasProgressTracking,
     @required this.userAgent,
   }) : assert(userAgent != null);
 
@@ -411,9 +414,11 @@ class WebSettings {
   /// See also: [WebView.gestureNavigationEnabled]
   final bool gestureNavigationEnabled;
 
+  final bool hasProgressTracking;
+
   @override
   String toString() {
-    return 'WebSettings(javascriptMode: $javascriptMode, hasNavigationDelegate: $hasNavigationDelegate, debuggingEnabled: $debuggingEnabled, gestureNavigationEnabled: $gestureNavigationEnabled, userAgent: $userAgent)';
+    return 'WebSettings(javascriptMode: $javascriptMode, hasNavigationDelegate: $hasNavigationDelegate,  hasProgressTracking: $hasProgressTracking,debuggingEnabled: $debuggingEnabled, gestureNavigationEnabled: $gestureNavigationEnabled, userAgent: $userAgent)';
   }
 }
 
